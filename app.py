@@ -10,7 +10,7 @@ naver_rank_v3의 파싱 로직을 웹 API로 감싼 것.
   CACHE_TTL        같은 키워드 캐시 유지 초 (기본 600 = 10분, 과요청 차단 방지)
 """
 import datetime, json, os, re, threading, time
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from curl_cffi import requests as cffi_requests
 from fastapi import FastAPI, HTTPException, Request
@@ -65,11 +65,29 @@ def _sanitize(t):
 _clean = lambda x: re.sub(r"</?mark>", "", x or "")
 
 
+def _stable_link(p):
+    nvmid = p.get("nvMid")
+    if p.get("cardType") == "CATALOG_CARD" and nvmid:
+        return "https://search.shopping.naver.com/catalog/" + str(nvmid)
+    mu = p.get("mallUrl") or {}
+    raw = mu.get("pcUrl") or mu.get("mobileUrl") or ""
+    cpid = p.get("channelProductId")
+    if raw and cpid:
+        m = re.search(r"[?&]url=([^&]+)", raw)
+        if m:
+            inner = unquote(m.group(1))
+            pm = re.match(r"(https?://[^/?#]+/[^/?#]+)", inner)
+            if pm:
+                base = pm.group(1).replace("://m.smartstore.naver.com", "://smartstore.naver.com").replace("://m.brand.naver.com", "://brand.naver.com")
+                return base + "/products/" + str(cpid)
+    pcu = p.get("productClickUrl") or {}
+    return pcu.get("mobileUrl") or pcu.get("pcUrl") or (("https://search.shopping.naver.com/catalog/" + str(nvmid)) if nvmid else "")
+
+
 def _row(p, pos, now):
     st = p.get("sourceType")
     kind = {"AD": "광고", "SAS": "오가닉", "SUPER_POINT": "포인트"}.get(st, st or "?")
-    pcu = p.get("productClickUrl") or {}
-    link = pcu.get("mobileUrl") or pcu.get("pcUrl") or ""
+    link = _stable_link(p)
     return {
         "screenPos": pos,
         "kind": kind,
