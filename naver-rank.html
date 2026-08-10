@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS · 네이버 순위 검색</title>
+<style>
+  :root {
+    --bg: #0b0f1a; --panel: #121828; --panel2: #1a2138;
+    --line: #232c47; --text: #e6ebf5; --dim: #8a94ad;
+    --accent: #4da3ff; --gold: #ffcc66; --green: #5ad18b; --red: #ff7a7a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; min-height: 100vh; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 60px; }
+  header { display: flex; align-items: baseline; gap: 10px; margin-bottom: 20px; }
+  header h1 { font-size: 20px; letter-spacing: 1px; }
+  header h1 .j { color: var(--accent); }
+  header .sub { color: var(--dim); font-size: 13px; }
+  header a { color: var(--dim); font-size: 13px; margin-left: auto; text-decoration: none; }
+  header a:hover { color: var(--accent); }
+
+  .searchbar { display: flex; gap: 8px; margin-bottom: 14px; }
+  .searchbar input { flex: 1; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 13px 16px; color: var(--text); font-size: 16px; outline: none; }
+  .searchbar input:focus { border-color: var(--accent); }
+  .searchbar button { background: var(--accent); border: 0; border-radius: 10px;
+    padding: 0 22px; font-size: 15px; font-weight: 700; color: #071120; cursor: pointer; }
+  .searchbar button:disabled { opacity: .5; cursor: wait; }
+
+  .opts { display: flex; gap: 14px; align-items: center; margin-bottom: 18px;
+    color: var(--dim); font-size: 13px; flex-wrap: wrap; }
+  .opts label { display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  .opts select { background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 3px 6px; }
+
+  .status { padding: 14px 16px; border-radius: 10px; background: var(--panel);
+    border: 1px solid var(--line); color: var(--dim); font-size: 14px;
+    margin-bottom: 14px; display: none; line-height: 1.6; }
+  .status.err { border-color: #5b2a35; color: var(--red); }
+
+  .meta { color: var(--dim); font-size: 13px; margin: 6px 2px 10px; display: none; }
+  .meta b { color: var(--text); }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 13px 15px; margin-bottom: 9px; display: flex; gap: 14px; align-items: flex-start; }
+  .card.ad { opacity: .55; border-style: dashed; }
+  .rankbox { min-width: 44px; text-align: center; }
+  .rankbox .n { font-size: 21px; font-weight: 800; color: var(--gold); }
+  .rankbox .n.small { font-size: 13px; color: var(--dim); font-weight: 600; }
+  .rankbox .pos { font-size: 11px; color: var(--dim); margin-top: 2px; }
+  .info { flex: 1; min-width: 0; }
+  .name { font-size: 14.5px; line-height: 1.45; margin-bottom: 6px; word-break: keep-all; }
+  .name a { color: var(--text); text-decoration: none; }
+  .name a:hover { color: var(--accent); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--dim); }
+  .tag { background: var(--panel2); border-radius: 5px; padding: 2px 7px; }
+  .tag.buy { color: var(--green); }
+  .tag.adtag { color: var(--red); }
+  .price { font-size: 16px; font-weight: 700; white-space: nowrap; }
+  .price small { color: var(--dim); font-weight: 400; }
+  footer { color: var(--dim); font-size: 12px; margin-top: 26px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="j">JARVIS</span> 네이버 순위 검색</h1>
+    <span class="sub">통합검색 쇼핑 기준</span>
+    <a href="index.html">← 대시보드</a>
+  </header>
+
+  <div class="searchbar">
+    <input id="kw" type="text" placeholder="키워드 입력 (예: 레이싱 휠 거치대)" autofocus>
+    <button id="go">검색</button>
+  </div>
+
+  <div class="opts">
+    <label>표시 개수
+      <select id="topn"><option>10</option><option selected>20</option><option>30</option></select>
+    </label>
+    <label><input type="checkbox" id="showads"> 광고 포함 화면 순서로 보기</label>
+  </div>
+
+  <div class="status" id="status"></div>
+  <div class="meta" id="meta"></div>
+  <div id="results"></div>
+
+  <footer>
+    · 순위 기준: 네이버 <b>통합검색</b> 쇼핑 모듈의 오가닉 노출 순위 (쇼핑탭 자체 순위와 다를 수 있음)<br>
+    · 구매수는 스마트스토어(단독몰) 상품만 제공됨 · 같은 키워드는 10분간 캐시된 결과 표시<br>
+    · 서버가 15분 이상 쉬면 첫 검색이 최대 1분 걸릴 수 있음 (무료 서버 웜업)
+  </footer>
+</div>
+
+<script>
+// ====== 설정 ======
+const API_BASE = "https://jarvis-naver-rank.onrender.com";
+const API_KEY  = "jarvis2026secret";
+// ==================
+
+const $ = id => document.getElementById(id);
+const fmt = v => (v == null ? "-" : Number(v).toLocaleString("ko-KR"));
+
+let warming = null;
+
+function setStatus(msg, isErr) {
+  const el = $("status");
+  el.style.display = msg ? "block" : "none";
+  el.className = "status" + (isErr ? " err" : "");
+  el.innerHTML = msg || "";
+}
+
+async function search() {
+  const kw = $("kw").value.trim();
+  if (!kw) return;
+  $("go").disabled = true;
+  $("results").innerHTML = "";
+  $("meta").style.display = "none";
+  setStatus("네이버에서 순위 가져오는 중...");
+
+  // 무료 서버 콜드스타트 안내 (8초 넘게 걸리면 문구 교체)
+  warming = setTimeout(() => setStatus(
+    "서버가 잠에서 깨는 중입니다... (무료 서버라 최대 1분) ☕"), 8000);
+
+  try {
+    const url = API_BASE + "/rank?q=" + encodeURIComponent(kw)
+      + "&top=" + $("topn").value + "&screen=true&key=" + encodeURIComponent(API_KEY);
+    const r = await fetch(url);
+    clearTimeout(warming);
+    if (!r.ok) {
+      let d = {}; try { d = await r.json(); } catch (e) {}
+      const detail = d.detail && (d.detail.msg || d.detail) || ("HTTP " + r.status);
+      setStatus("검색 실패: " + detail + "<br>잠시 후 다시 시도해 보세요.", true);
+      return;
+    }
+    const data = await r.json();
+    render(data);
+  } catch (e) {
+    clearTimeout(warming);
+    setStatus("서버 연결 실패: " + e.message + "<br>잠시 후 다시 시도해 보세요.", true);
+  } finally {
+    $("go").disabled = false;
+  }
+}
+
+function card(item, showScreen) {
+  const isAd = item.kind === "광고";
+  const isPt = item.kind === "포인트";
+  const nvLink = item.link
+    || (item.nvMid ? `https://search.shopping.naver.com/catalog/${item.nvMid}` : null);
+  const rankHtml = item.rank
+    ? `<div class="n">${item.rank}</div>`
+    : `<div class="n small">${isAd ? "AD" : isPt ? "PT" : "-"}</div>`;
+  const posHtml = showScreen ? `<div class="pos">화면 ${item.screenPos}</div>` : "";
+  const tags = [];
+  if (isAd) tags.push(`<span class="tag adtag">광고</span>`);
+  if (isPt) tags.push(`<span class="tag">포인트 적립</span>`);
+  tags.push(`<span class="tag">${item.type}${item.mall ? " · " + item.mall : ""}</span>`);
+  tags.push(`<span class="tag">리뷰 ${fmt(item.review)}</span>`);
+  if (item.score) tags.push(`<span class="tag">★ ${item.score}</span>`);
+  if (item.purchase) tags.push(`<span class="tag buy">구매 ${fmt(item.purchase)}</span>`);
+  if (item.mallCount) tags.push(`<span class="tag">판매처 ${fmt(item.mallCount)}곳</span>`);
+  if (item.keep) tags.push(`<span class="tag">찜 ${fmt(item.keep)}</span>`);
+  const nameHtml = nvLink
+    ? `<a href="${nvLink}" target="_blank" rel="noopener">${item.name}</a>` : item.name;
+  return `<div class="card${isAd ? " ad" : ""}">
+    <div class="rankbox">${rankHtml}${posHtml}</div>
+    <div class="info"><div class="name">${nameHtml}</div>
+      <div class="tags">${tags.join("")}</div></div>
+    <div class="price">${fmt(item.price)}<small>원</small></div>
+  </div>`;
+}
+
+let lastData = null;
+
+function render(data) {
+  lastData = data;
+  setStatus("");
+  const showAds = $("showads").checked;
+  const list = showAds ? (data.screen || []) : data.organic;
+  const topn = Number($("topn").value);
+  const shown = showAds
+    ? list.slice(0, list.findIndex(x => x.rank === Math.min(topn, data.organicTotal)) + 1 || list.length)
+    : list;
+  $("meta").style.display = "block";
+  $("meta").innerHTML = `"<b>${data.keyword}</b>" — 오가닉 ${data.organicTotal}개 · 광고 ${data.adTotal}개`
+    + (data.cached ? " · <b>캐시</b>(10분 이내 결과)" : " · 실시간")
+    + ` · ${new Date().toLocaleTimeString("ko-KR")}`;
+  $("results").innerHTML = shown.map(x => card(x, showAds)).join("")
+    || `<div class="status" style="display:block">결과가 없습니다.</div>`;
+}
+
+$("go").addEventListener("click", search);
+$("kw").addEventListener("keydown", e => { if (e.key === "Enter") search(); });
+$("showads").addEventListener("change", () => { if (lastData) render(lastData); });
+$("topn").addEventListener("change", () => { if (lastData) render(lastData); });
+</script>
+</body>
+</html>
