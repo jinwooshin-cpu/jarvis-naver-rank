@@ -68,11 +68,14 @@ _clean = lambda x: re.sub(r"</?mark>", "", x or "")
 def _row(p, pos, now):
     st = p.get("sourceType")
     kind = {"AD": "광고", "SAS": "오가닉", "SUPER_POINT": "포인트"}.get(st, st or "?")
+    pcu = p.get("productClickUrl") or {}
+    link = pcu.get("mobileUrl") or pcu.get("pcUrl") or ""
     return {
         "screenPos": pos,
         "kind": kind,
         "rank": p.get("rank") if st == "SAS" else None,
         "name": _clean(p.get("productName")),
+        "link": link,
         "price": p.get("price") or p.get("discountedSalePrice") or p.get("salePrice"),
         "mall": p.get("mallName") or "",
         "type": "가격비교" if p.get("cardType") == "CATALOG_CARD" else "단독몰",
