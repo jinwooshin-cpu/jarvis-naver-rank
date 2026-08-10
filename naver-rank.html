@@ -120,14 +120,14 @@ async function search() {
   $("meta").style.display = "none";
   setStatus("네이버에서 순위 가져오는 중...");
 
-  // 무료 서버 콜드스타트 안내 (8초 넘게 걸리면 문구 교체)
   warming = setTimeout(() => setStatus(
     "서버가 잠에서 깨는 중입니다... (무료 서버라 최대 1분) ☕"), 8000);
 
   try {
     const url = API_BASE + "/rank?q=" + encodeURIComponent(kw)
-      + "&top=" + $("topn").value + "&screen=true&key=" + encodeURIComponent(API_KEY);
-    const r = await fetch(url);
+      + "&top=" + $("topn").value + "&screen=true&key=" + encodeURIComponent(API_KEY)
+      + "&_=" + Date.now();
+    const r = await fetch(url, { cache: "no-store" });
     clearTimeout(warming);
     if (!r.ok) {
       let d = {}; try { d = await r.json(); } catch (e) {}
